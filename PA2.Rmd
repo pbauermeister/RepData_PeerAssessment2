@@ -1,0 +1,195 @@
+---
+title: "Basic answers about severe weather events, using the NOAA Storm Database"
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
+---
+
+## 1. Synopsis
+
+*(This page is my work for the *Peer-graded Assignment (Course Project 2)* of the "Reproducible Research" course by Johns Hopkins University, tought on Coursera.)*
+
+The basic goal of this assignment is to explore the NOAA Storm Database and answer some basic questions about severe weather events. We use the NOAA database to answer some questions below, showing the code for the entire analysis.
+
+The questions are:
+- Across the United States, which types of events are most harmful with respect to population health?
+- Across the United States, which types of events have the greatest economic consequences?
+
+## 2. Environment Setup
+
+Here we import the needed lib(s), and set the chunk options globally for this page:
+```{r init, echo=TRUE}
+library(knitr)
+opts_chunk$set(echo=TRUE)
+```
+
+## 3. Data Processing
+### 3.1 Loading and preprocessing the data
+
+Let's unpack the compressed archive and load the enclosed CSV data. We will not bother parsing dates.
+```{r data-load, cache=TRUE}
+file_name <- "repdata_data_StormData.csv.bz2"
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+if (!file.exists(file_name)) {
+    download.file(url, file_name)
+}
+
+stormdata <- read.csv(file_name) # decompress and load
+```
+
+### 3.2 Examining the event types
+As we can see in Annex A, the EVTYPE variable is not normalized, and there are also typos.
+
+### 3.3 Grouping event types
+In order to have more synthetic event categories (less groups and no typo effects) let's create the `evgroup` variable:
+```{r data-group, cache=TRUE}
+evgroup <- tolower(as.character(stormdata$EVTYPE)) # copy original events as lowercase
+
+evgroup[grepl("\\<(blizzard)\\>", evgroup)] <- "BLIZZARD"
+evgroup[grepl("\\<(cold|cool|low temp(erature)?|hypothermia|windchill)\\>", evgroup)] <- "COLD"
+evgroup[grepl("\\<(dry(ness)?|driest|drought)\\>", evgroup)] <- "DROUGHT"
+evgroup[grepl("\\<(erosio?n|landslump)\\>", evgroup)] <- "EROSION"
+evgroup[grepl("\\<(wild)?fires?\\>", evgroup)] <- "FIRE"
+evgroup[grepl("\\<(flo+d(|s|ing)|fldg|stream|drowning|(coastal)?flood(|in))\\>", evgroup)] <- "FLOOD"
+evgroup[grepl("\\<(fog|dust(storm)?|smoke|)\\>", evgroup)] <- "FOG_AND_DUST"
+evgroup[grepl("\\<hail(storms?)?\\>", evgroup)] <- "HAIL"
+evgroup[grepl("\\<(warm|warmth|hot|high temperatures?|heat(burst)?|hyperthermia)\\>", evgroup)] <- "HEAT"
+evgroup[grepl("(hurricane|typhoon|tropical depression)", evgroup)] <- "HURRICANE"
+evgroup[grepl("\\<ic[ye]|freeze|freezing|frost|glaze|sleet\\>", evgroup)] <- "ICE"
+evgroup[grepl("\\<lig[hn]tn?ing\\>", evgroup)] <- "LIGHTNING"
+evgroup[grepl("\\<(precip([ia]tation)?|rainfall|rains?|showers?|rainstorms?)\\>", evgroup)] <- "PRECIPITATION"
+evgroup[grepl("slide", evgroup)] <- "SLIDE"
+evgroup[grepl("\\<((thunder)?snow(storm)?|snow(s|fall|pack)?|avalanch?e)\\>", evgroup)] <- "SNOW"
+evgroup[grepl("\\<((coastal)?storm|thun?d?e+r?s?torm[sw]?|thunderestorm|thunderstrom|tstmw?)", evgroup)] <- "THUNDERSTORM"
+evgroup[grepl("\\<((tornado|TORNDAO)e?s?|funnels?|gustnado|microburst|landspout|wall cloud|downburst|way?ter(spout.*)?)\\>", evgroup)] <- "TORNADO"
+evgroup[grepl("\\<(volcanic|vog)\\>", evgroup)] <- "VOLCANISM"
+evgroup[grepl("\\<(tsunami|surf|currents?|rogue wave|seas?|marine|tides?|high waves|swells|coastal surge)\\>", evgroup)] <- "WATER"
+evgroup[grepl("\\<wet(ness)?\\>", evgroup)] <- "WETNESS"
+evgroup[grepl("\\<(wind|wnd|(whirl)?winds?)\\>", evgroup)] <- "WIND"
+evgroup[grepl("\\<(winter|winte?ry)\\>", evgroup)] <- "WINTER"
+
+evgroup[grepl("[a-z]", evgroup)] <- "OTHER" # collect any uncategorized original events (lowercase)
+
+evgroup <-as.factor(evgroup)
+```
+This was quite some work, and we'll see later if it pays.
+
+All events that were not categorized are collected all together in the `OTHER` group. We will see if doing so has only marginal effect on the results.
+
+### 3.4 Exploring the data
+Let's evaluate the impact on health (fatalities and injuries):
+```{r data-explore, cache=TRUE}
+health.impact <- stormdata$FATALITIES + stormdata$INJURIES;
+df = data.frame(evgroup=evgroup, value=health.impact)
+impact <- aggregate(value ~ evgroup, data = df, sum)
+impact.ordered.top <- impact[order(impact$value, decreasing = TRUE),][1:10,]
+```
+
+Impact per natural event group:
+```{r data-explore-2, cache=TRUE}
+impact.ordered.top
+```
+As we can see, there is a domination of the first event over the others, by almost one order of magnitude. So to better distinguish the values, we will plot the values with a logarithmic scale. 
+
+### 3.5 Plotting helper
+At this point, as we plan to produce a few aggregated graphs and lists of identical nature, let's create a function to generate them easily later:
+```{r helper-plot, cache=TRUE}
+makeplot <- function(events, values, what, ylab) {
+    top.n <- 10;
+    df = data.frame(evgroup=events, value=values)
+    impact <- aggregate(value ~ evgroup, data = df, sum)
+    impact.ordered.top <- impact[order(impact$value, decreasing = TRUE),][1:top.n,]
+    par(mar = c(11,4,4,4), cex = 0.75)
+    barplot(impact.ordered.top$value,
+        main = paste("Impact of natural events on", what),
+        ylab = paste(ylab, "(log)"),
+#        xlab = paste(ylab, "caused by natural events"),
+        names.arg = impact.ordered.top$evgroup,
+        cex.axis = 0.75,
+        log = "y",  # log scale!
+        las = 2)
+}
+
+make_list <- function(events, values) {
+    top.n <- 10;
+    df = data.frame(evgroup=events, value=values)
+    impact <- aggregate(value ~ evgroup, data = df, sum)
+    impact.ordered.top <- impact[order(impact$value, decreasing = TRUE),][1:top.n,]
+    print(impact.ordered.top)
+}
+```
+
+To quantify the damages, two variables (per damage) are used: the value, and an exponent in numeric or alphabetic form.
+Let's create a function to compute the numeric damage value:
+```{r helper-decode-value, cache=FALSE}
+decode_value <- function(v, e) {
+    res <- v
+    res[e=="b"] <-res[e=="b"] * 1e9
+    res[e=="m"] <-res[e=="m"] * 1e6
+    res[e=="k"] <-res[e=="k"] * 1e3
+    res[e=="2"] <-res[e=="2"] * 1e2
+    res
+}
+```
+
+## 4. Results
+### 4.1 Impact of natural events on population health
+```{r impact-health, cache=FALSE}
+health.impact <- stormdata$FATALITIES + stormdata$INJURIES;
+makeplot(evgroup, health.impact, "health", "Fatalities and injuries")
+```
+
+We see a clear dominant impact of hurricanes.
+
+### 4.2 Impact on property damage
+```{r impact-property, cache=FALSE}
+property.damages <- decode_value(stormdata$PROPDMG, stormdata$PROPDMGEXP)
+makeplot(evgroup, property.damages, "property damage", "Financial damage")
+```
+
+HURRICANE and TORNADO dominate.
+
+Comment: We can see that hurricanes have less impact than tornados **on population health**, probably due to the fact that hurricanes are better predicted, allowing population evacuation.
+
+### 4.3 Impact on crop damage
+```{r impact-crop, cache=FALSE}
+crop.damages <- decode_value(stormdata$CROPDMG, stormdata$CROPDMGEXP)
+makeplot(evgroup, crop.damages, "crop damage", "Ĉrop damage")
+```
+
+## 5. Further Research
+To strictly restrict the research to the United States, geographic data enclosed in the data set could be used to filter the observations.
+
+
+HURRICANE clearly dominate.
+
+Comment: crops looks more resistant to natural events (other than HURRICANE) than property items.
+
+# Annex A - Event types
+The EVTYPE variable of the dataset is:
+```{r data-examine, cache=TRUE}
+levels(stormdata$EVTYPE)
+```
+# Annex B - Effects of cleaning and grouping events
+Does the grouping and cleanup of events that we did earlier have any noticeable effect?
+
+```{r data-cleaning-1, cache=FALSE}
+health.impact <- stormdata$FATALITIES + stormdata$INJURIES;
+make_list(evgroup, health.impact)
+```
+
+- We did not see the `OTHER` group showing off, so the impact of the related events, even cumulated, shall be marginal.
+
+If we list the impact relative to the original events:
+```{r data-cleaning-2, cache=FALSE}
+make_list(stormdata$EVTYPE, health.impact)
+```
+We can see that:
+
+- TORNADO still dominates (probably because, by being the most frequent event, it is *de facto* better normalized).
+
+- Heat is represented twice, as HEAT and as EXCESSIVE HEAT, so it was worth grouping them together. Similar comment for thunderstorm wind.
+
+As a conclusion, the grouping and cleanup of event types improves the consistency of the results.
