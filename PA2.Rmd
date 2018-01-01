@@ -1,9 +1,9 @@
 ---
 title: "Basic answers about severe weather events, using the NOAA Storm Database"
 output:
+  pdf_document: default
   html_document:
     keep_md: yes
-  pdf_document: default
 ---
 
 ## 1. Synopsis
@@ -13,6 +13,7 @@ output:
 The basic goal of this assignment is to explore the NOAA Storm Database and answer some basic questions about severe weather events. We use the NOAA database to answer some questions below, showing the code for the entire analysis.
 
 The questions are:
+
 - Across the United States, which types of events are most harmful with respect to population health?
 - Across the United States, which types of events have the greatest economic consequences?
 
