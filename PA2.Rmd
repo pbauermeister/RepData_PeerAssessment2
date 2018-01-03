@@ -10,7 +10,7 @@ output:
 
 *(This page is my work for the *Peer-graded Assignment (Course Project 2)* of the "Reproducible Research" course by Johns Hopkins University, tought on Coursera.)*
 
-The basic goal of this assignment is to explore the NOAA Storm Database and answer some basic questions about severe weather events. We use the NOAA database to answer some questions below, showing the code for the entire analysis.
+The basic goal of this report is to answer some basic questions about severe weather events. We use the NOAA (National Oceanic and Atmospheric Administration) database to answer the questions below, showing the code for the entire analysis.
 
 The questions are:
 
@@ -23,6 +23,11 @@ Here we import the needed lib(s), and set the chunk options globally for this pa
 ```{r init, echo=TRUE}
 library(knitr)
 opts_chunk$set(echo=TRUE)
+```
+
+The following information may be useful to consistantly reproduce this study:
+```{r session-info, echo=TRUE}
+sessionInfo()
 ```
 
 ## 3. Data Processing
@@ -125,8 +130,9 @@ make_list <- function(events, values) {
 To quantify the damages, two variables (per damage) are used: the value, and an exponent in numeric or alphabetic form.
 Let's create a function to compute the numeric damage value:
 ```{r helper-decode-value, cache=FALSE}
-decode_value <- function(v, e) {
-    res <- v
+decode_value <- function(val, exp) {
+    res <- val
+    e <- tolower(exp)
     res[e=="b"] <-res[e=="b"] * 1e9
     res[e=="m"] <-res[e=="m"] * 1e6
     res[e=="k"] <-res[e=="k"] * 1e3
@@ -142,7 +148,7 @@ health.impact <- stormdata$FATALITIES + stormdata$INJURIES;
 makeplot(evgroup, health.impact, "health", "Fatalities and injuries")
 ```
 
-We see a clear dominant impact of hurricanes.
+We see a clear dominant impact of tornados.
 
 ### 4.2 Impact on property damage
 ```{r impact-property, cache=FALSE}
@@ -150,15 +156,15 @@ property.damages <- decode_value(stormdata$PROPDMG, stormdata$PROPDMGEXP)
 makeplot(evgroup, property.damages, "property damage", "Financial damage")
 ```
 
-HURRICANE and TORNADO dominate.
-
-Comment: We can see that hurricanes have less impact than tornados **on population health**, probably due to the fact that hurricanes are better predicted, allowing population evacuation.
+Floods dominate, followed by hurricanes, thunderstorms and tornados.
 
 ### 4.3 Impact on crop damage
 ```{r impact-crop, cache=FALSE}
 crop.damages <- decode_value(stormdata$CROPDMG, stormdata$CROPDMGEXP)
 makeplot(evgroup, crop.damages, "crop damage", "Ĉrop damage")
 ```
+
+Droughts and floods dominate.
 
 ## 5. Further Research
 To strictly restrict the research to the United States, geographic data enclosed in the data set could be used to filter the observations.
